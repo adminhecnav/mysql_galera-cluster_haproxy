@@ -1,0 +1,20 @@
+#SPDX-License-Identifier: MIT-0
+galaxy_info:
+  author: Hector Navea
+  description: Role to configure and deploy HAProxy as a load balancer for a MySQL-Galera cluster.
+  company: 
+
+  license: MIT
+
+  min_ansible_version: 2.1
+
+
+  galaxy_tags:
+    - haproxy
+    - mysql
+    - galera
+    - loadbalancer
+    - database
+
+dependencies: []
+

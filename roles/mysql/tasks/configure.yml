@@ -1,0 +1,130 @@
+- name: Create directory for GPG
+  ansible.builtin.file:
+    path: "~/.gnupg"
+    state: directory
+    mode: '0700'
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']    
+
+- name: Restart dirmngr
+  ansible.builtin.command: gpgconf --kill dirmngr
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Start dirmngr
+  ansible.builtin.command: gpgconf --launch dirmngr
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Import GPG key for Galera repository
+  ansible.builtin.command: gpg --no-default-keyring --keyring /usr/share/keyrings/galera-keyring.gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys 8DA84635
+  ignore_errors: yes
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Add MySQL WSREP and Galera repositories
+  block:
+    - name: Add MySQL WSREP repository
+      ansible.builtin.lineinfile:
+        path: /etc/apt/sources.list.d/galera.list
+        line: "deb [signed-by=/usr/share/keyrings/galera-keyring.gpg] http://releases.galeracluster.com/mysql-wsrep-8.0/ubuntu noble main"
+        create: yes
+      tags: mysql_setup
+      when: inventory_hostname in groups['mysql_nodes']
+
+    - name: Add Galera repository
+      ansible.builtin.lineinfile:
+        path: /etc/apt/sources.list.d/galera.list
+        line: "deb [signed-by=/usr/share/keyrings/galera-keyring.gpg] http://releases.galeracluster.com/galera-4/ubuntu noble main"
+        create: yes
+      tags: mysql_setup
+      when: inventory_hostname in groups['mysql_nodes']
+
+- name: Update packages
+  ansible.builtin.apt:
+    update_cache: yes
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Install MySQL and Galera Cluster
+  ansible.builtin.apt:
+    name:
+      - mysql-client=8.0.40-26.21+1ubuntu24.04
+      - mysql-wsrep-8.0
+      - galera-4
+    state: present
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Attempt to fix broken dependencies if there are errors
+  ansible.builtin.command: apt --fix-broken install -y
+  ignore_errors: yes
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Verify installation
+  ansible.builtin.shell: "dpkg -l | grep -E 'mysql|galera'"
+  register: mysql_installation_status
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- ansible.builtin.debug:
+    msg: "{{ mysql_installation_status.stdout_lines }}"
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Stop MySQL and clean state files on all nodes
+  block:
+    - name: Stop MySQL
+      ansible.builtin.systemd:
+        name: mysql
+        state: stopped
+      tags: mysql_setup
+      when: inventory_hostname in groups['mysql_nodes']
+    
+    - name: Forcefully kill MySQL processes
+      ansible.builtin.command: killall -9 mysqld
+      ignore_errors: yes
+      tags: mysql_setup
+      when: inventory_hostname in groups['mysql_nodes']
+
+    - name: Remove Galera state files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/mysql/grastate.dat
+        - /var/lib/mysql/gvwstate.dat
+      tags: mysql_setup
+      when: inventory_hostname in groups['mysql_nodes']
+
+- name: Configure Galera cluster on each node
+  ansible.builtin.template:
+    src: mysql_galera_cluster.cnf.j2
+    dest: /etc/mysql/conf.d/mysql_galera_cluster.cnf
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Disable Apparmor
+  block:
+    - name: Disable AppArmor profile for MySQL
+      ansible.builtin.file:
+        src: /etc/apparmor.d/usr.sbin.mysqld
+        dest: /etc/apparmor.d/disable/usr.sbin.mysqld
+        state: link
+        force: yes  # Overwrite the link if it already exists
+      tags: stop_apparmor
+      when: inventory_hostname in groups['mysql_nodes']
+
+    - name: Remove AppArmor profile for MySQL from active memory
+      ansible.builtin.command: apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+      ignore_errors: yes  # Prevent failure if the profile is already removed
+      tags: stop_apparmor
+      when: inventory_hostname in groups['mysql_nodes']
+
+    - name: Restart AppArmor service
+      ansible.builtin.systemd:
+        name: apparmor
+        state: restarted
+      tags: stop_apparmor 
+      when: inventory_hostname in groups['mysql_nodes']

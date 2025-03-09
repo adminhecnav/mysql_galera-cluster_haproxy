@@ -1,0 +1,5 @@
+- name: Start and enable HAProxy
+  ansible.builtin.systemd:
+    name: haproxy
+    state: started
+    enabled: yes

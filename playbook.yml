@@ -1,0 +1,19 @@
+- name: MYSQL Cluster Galera
+  hosts: mysql_nodes
+  become: yes
+  tags:
+    - mysql_setup
+    - stop_apparmor
+    - bootstrap_cluster
+    - start_secondary_nodes
+  vars_files:
+    - roles/mysql/vars/main.yml
+  roles:
+    - mysql
+
+- name: Configure and deploy HAProxy
+  hosts: haproxy
+  become: yes
+  tags: haproxy_setup
+  roles:
+    - haproxy

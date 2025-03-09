@@ -1,0 +1,17 @@
+galaxy_info:
+  author: Hector Navea
+  description: Configuration and deployment of a MySQL-Galera cluster
+  company: 
+
+  license: MIT
+
+  min_ansible_version: 2.9
+
+  galaxy_tags:
+    - mysql
+    - galera
+    - cluster
+    - database
+    - replication
+
+dependencies: []

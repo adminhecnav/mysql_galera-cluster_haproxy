@@ -1,0 +1,56 @@
+- name: Enable time synchronization
+  ansible.builtin.command: timedatectl set-ntp on
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Restart time synchronization service
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    state: restarted
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Remove previous repository files
+  ansible.builtin.file:
+    path: "/etc/apt/sources.list.d/galera.list"
+    state: absent
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Remove previous repository keys
+  ansible.builtin.file:
+    path: "/usr/share/keyrings/galera-key.asc"
+    state: absent
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Remove conflicting packages
+  ansible.builtin.apt:
+    name:
+      - dirmngr
+      - gnupg
+    state: absent
+    purge: yes
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Update repositories and system
+  ansible.builtin.apt:
+    update_cache: yes
+    upgrade: dist
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
+
+- name: Install dependencies
+  ansible.builtin.apt:
+    name:
+      - dirmngr
+      - gnupg
+      - gnupg2
+      - software-properties-common
+      - curl
+      - wget
+      - util-linux
+    state: present
+  tags: mysql_setup
+  when: inventory_hostname in groups['mysql_nodes']
